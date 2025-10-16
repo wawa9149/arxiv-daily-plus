@@ -22,12 +22,16 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           python main.py \
-            --categories cs.CV cs.AI \
+            --categories eess.AS cs.SD \
+            --max_paper_num 3 \
             --provider OpenAI \
             --model gpt-4o \
             --base_url https://api.openai.com/v1 \
             --api_key "$OPENAI_API_KEY" \
-            --num_workers 4 \
-            --title "Daily Arxiv" \
+            --filter_method bm25 \
+            --language korean \
+            --notify_method slack \
+            --slack_webhook_url "$SLACK_WEBHOOK_URL" \
+            --title "Daily arXiv" \
             --temperature 0.7 \
             --save

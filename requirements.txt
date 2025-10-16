@@ -1,6 +1,18 @@
+# -----------------------
+# Core Dependencies
+# -----------------------
 tqdm
 loguru
-# For ollama
-ollama
-# For openai
+requests
 openai
+
+# -----------------------
+# Model-related Libraries
+# -----------------------
+torch
+transformers
+rank_bm25
+
+# -----------------------
+# Optional: For Ollama Provider 
+ollama
