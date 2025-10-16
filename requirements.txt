@@ -5,6 +5,7 @@ tqdm
 loguru
 requests
 openai
+beautifulsoup4
 
 # -----------------------
 # Model-related Libraries
