@@ -1,0 +1,6 @@
+tqdm
+loguru
+# For ollama
+ollama
+# For openai
+openai

@@ -1,0 +1,3 @@
+My research focuses on building intelligent speech systems that combine language understanding and generation. 
+I am particularly interested in how speech, prosody, and emotion can be modeled together with language to create more natural and human-like AI agents. 
+My work explores generative and multimodal approaches that unify speech, text, and visual information — enabling AI systems that can not only speak but also understand context, emotion, and intent in conversation.
