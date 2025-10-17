@@ -60,7 +60,7 @@ if __name__ == "__main__":
         "--filter_method",
         type=str,
         choices=["bm25", "dpr", "splade", "none"],
-        default="bm25",
+        default="none",
         help="Filtering method to use (bm25, dpr, splade, none)"
     )
 
@@ -96,6 +96,9 @@ if __name__ == "__main__":
     parser.add_argument("--sender", type=str, help="Sender email address")
     parser.add_argument("--receiver", type=str, help="Receiver email address")
     parser.add_argument("--sender_password", type=str, help="Sender email password or app password")
+
+
+
 
     args = parser.parse_args()
 

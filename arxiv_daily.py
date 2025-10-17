@@ -13,6 +13,8 @@ from email.utils import parseaddr, formataddr
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import requests
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 from rank_bm25 import BM25Okapi
 from transformers import DPRQuestionEncoder, DPRQuestionEncoderTokenizer
 from transformers import DPRContextEncoder, DPRContextEncoderTokenizer
@@ -81,7 +83,76 @@ class ArxivDaily:
         )
 
         self.description = description
-        self.lock = threading.Lock()  # 添加线程锁
+        self.lock = threading.Lock()
+
+
+
+    def get_code_url(self, arxiv_id: str):
+        """
+        Safely fetch the associated GitHub repository (if any)
+        from Papers with Code using the given arXiv ID.
+
+        Returns None if:
+        - no code repository is linked,
+        - the paper is not registered on Papers with Code,
+        - or the response is invalid.
+        """
+        # Create a session with automatic retry policy
+        s = requests.Session()
+        retries = Retry(
+            total=5,                     # Maximum retry attempts
+            backoff_factor=0.2,          # Delay between retries increases by this factor
+            status_forcelist=[500, 502, 503, 504],  # Retry only for these HTTP status codes
+        )
+        s.mount("https://", HTTPAdapter(max_retries=retries))
+
+        try:
+            # Fetch the paper entry by arXiv ID
+            url = f"https://paperswithcode.com/api/v1/papers/?arxiv_id={arxiv_id}"
+            resp = s.get(url, timeout=10)
+
+            # Papers not yet registered on Papers with Code may return HTML or an empty response
+            if resp.status_code != 200 or not resp.text.strip().startswith("{"):
+                print(f"[Code URL] No entry for {arxiv_id} (not yet registered on Papers with Code).")
+                return None
+
+            paper_list = resp.json()
+        except Exception as e:
+            print(f"[Code URL] Error fetching paper list for {arxiv_id}: {e}")
+            return None
+
+        # If the paper is registered but no data is returned
+        if paper_list.get("count", 0) == 0:
+            print(f"[Code URL] Paper {arxiv_id} not found in Papers with Code.")
+            return None
+
+        # Retrieve repository information using the paper ID
+        paper_id = paper_list["results"][0]["id"]
+        try:
+            repo_url = f"https://paperswithcode.com/api/v1/papers/{paper_id}/repositories/"
+            resp2 = s.get(repo_url, timeout=10)
+
+            # If the repository endpoint returns an invalid response
+            if resp2.status_code != 200 or not resp2.text.strip().startswith("{"):
+                print(f"[Code URL] Repo info missing for {arxiv_id}.")
+                return None
+
+            repo_list = resp2.json()
+        except Exception as e:
+            print(f"[Code URL] Error fetching repositories for {arxiv_id}: {e}")
+            return None
+
+        # Check if a code repository actually exists
+        if repo_list.get("count", 0) == 0:
+            print(f"[Code URL] Paper {arxiv_id} has no linked code.")
+            return None
+
+        # Return the first repository URL (usually GitHub)
+        code_url = repo_list["results"][0].get("url")
+        print(f"[Code URL] Found for {arxiv_id}: {code_url}")
+        return code_url
+
+
 
     def get_response(self, title, abstract):
         if self.language == "english":
@@ -284,6 +355,7 @@ class ArxivDaily:
                     "summary": summary,
                     "relevance_score": relevance_score,
                     "pdf_url": paper["pdf_url"],
+                    "code_url": self.get_code_url(paper["arXiv_id"]),
                 }
 
                 # Save to cache
@@ -312,6 +384,7 @@ class ArxivDaily:
                         "summary": "Failed to summarize this paper.",
                         "relevance_score": 0.0,
                         "pdf_url": paper.get("pdf_url", ""),
+                        "code_url": self.get_code_url(paper["arXiv_id"]),
                     }
                     try:
                         with self.lock:
@@ -659,7 +732,8 @@ class ArxivDaily:
                     "additional_observation": additional_observation,
                 }
 
-                return render_summary_sections(structured_summary)
+                html_summary = render_summary_sections(structured_summary)
+                return structured_summary, html_summary
 
             except Exception as error:
                 print(summary_retry_msg(attempt, error))
@@ -677,7 +751,8 @@ class ArxivDaily:
                             "recommendations": [],
                             "additional_observation": no_observation,
                         }
-                        return render_summary_sections(fallback_data)
+                        html_summary = render_summary_sections(structured_summary)
+                        return structured_summary, html_summary
 
 
 
@@ -711,7 +786,7 @@ class ArxivDaily:
             )
 
         # Add overall summary to the top of the email
-        summary = self.summarize(recommendations)
+        _, summary = self.summarize(recommendations)
         content = summary
         content += "<br>" + "</br><br>".join(parts) + "</br>"
 
@@ -769,45 +844,86 @@ class ArxivDaily:
 
 
     def send_slack(self, webhook_url: str, title: str):
-        recommendations = self.get_recommendation()
+        import requests
 
-        self.render_email(recommendations)
+        # Generate recommendations and structured summary
+        recommendations = self.get_recommendation()  
+        summary_data, _ = self.summarize(recommendations)  
+        
+        trend_summary = summary_data.get("trend_summary", "No research trend available.")
+        recs = summary_data.get("recommendations", []) 
+        additional_obs = summary_data.get("additional_observation", "None.")
 
-        # Select the top 3 papers based on relevance_score
-        top_recommendations = sorted(
-            recommendations, key=lambda x: x["relevance_score"], reverse=True
-        )[:3]
-
-        # Build Slack message blocks (Markdown-based formatting)
-        message_blocks = [
+        # Slack message header
+        blocks = [
             {
                 "type": "header",
-                "text": {"type": "plain_text", "text": f"📚 {title} ({self.run_date})"}
+                "text": {"type": "plain_text", "text": f"📚 {title} ({self.run_date})"},
             },
+            {"type": "divider"},
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": "*Here are today’s Top 3 paper summaries.*"}
+                "text": {"type": "mrkdwn", "text": f"*🧠 Today's Research Trend*\n{trend_summary}"},
             },
-            {"type": "divider"}
+            {"type": "divider"},
         ]
 
-        for i, paper in enumerate(top_recommendations, start=1):
-            text = (
-                f"*{i}. {paper['title']}*\n"
-                f"{paper['summary'][:500]}...\n"
-                f"<{paper['pdf_url']}|[PDF Link]>  ·  Relevance: {paper['relevance_score']:.1f}"
+        # Top Recommendations (LLM summary, 3–5 papers)
+        if recs:
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "_🎯 Top Recommendations_"},
+            })
+            for r in recs:
+                text = (
+                    f"*• {r['title']}*\n"
+                    f"_{r.get('relevance_label', 'Relevance unknown')}_\n"
+                    f"> *Reason:* {r.get('recommend_reason', '-')}\n"
+                    f"> *Key Contribution:* {r.get('key_contribution', '-')}\n"
+                )
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": text}})
+                blocks.append({"type": "divider"})
+
+        # Additional Observations
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*🪄 Additional Observations*\n{additional_obs}"},
+        })
+        blocks.append({"type": "divider"})
+
+        # TL;DR summaries for all recommendations (bottom section)
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "*📄 Paper Summaries (TL;DR)*"},
+        })
+
+        for i, p in enumerate(recommendations[:10], 1):  
+            stars = "⭐️" * int(round(p["relevance_score"] / 2))
+            pdf_link = f"<{p['pdf_url']}|📄 PDF>"
+            desc = (
+                f"*{i}. {p['title']}*\n"
+                f"> {stars} *({p['relevance_score']:.1f})*\n"
+                f"> *arXiv ID:* `{p['arXiv_id']}`\n"
+                f"> *Summary:* {p['summary'][:300]}{'...' if len(p['summary']) > 300 else ''}\n"
+                f"{pdf_link}"
             )
-            message_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": text}})
-            message_blocks.append({"type": "divider"})
+            if p.get("code_url"):
+                desc += f" | <{p['code_url']}|💻 Code>"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": desc}})
+            blocks.append({"type": "divider"})
 
-        # Send message payload to Slack webhook
-        payload = {"blocks": message_blocks}
-        response = requests.post(webhook_url, json=payload)
 
-        if response.status_code == 200:
-            print("✅ Successfully sent Slack message (Top 3 papers).")
+        # Send message to Slack
+        payload = {"blocks": blocks}
+        resp = requests.post(webhook_url, json=payload)
+        if resp.status_code == 200:
+            print("✅ Slack summary sent successfully.")
         else:
-            print(f"⚠️ Failed to send Slack message: {response.status_code}, {response.text}")
+            print(f"⚠️ Slack send failed: {resp.status_code}, {resp.text}")
+
+
+
+
 
 
 
