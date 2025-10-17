@@ -3,7 +3,7 @@ name: Arxiv Daily Slack Bot
 on:
   schedule:
     - cron: "0 23 * * *"    # Runs every day at 08:00 KST (23:00 UTC)
-  workflow_dispatch:        # Allows manual trigger from GitHub Actions UI
+  workflow_dispatch:        # Manual trigger from GitHub Actions UI
 
 jobs:
   run:
@@ -14,22 +14,29 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
+
       - name: Install dependencies
         run: pip install -r requirements.txt
+
       - name: Run ArxivDaily
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          MODEL: ${{ vars.MODEL }}
+          LANGUAGE: ${{ vars.LANGUAGE }}
+          FILTER_METHOD: ${{ vars.FILTER_METHOD }}
+          CATEGORIES: ${{ vars.CATEGORIES }}
+          MAX_PAPER_NUM: ${{ vars.MAX_PAPER_NUM }}
         run: |
           python main.py \
-            --categories eess.AS cs.SD \
-            --max_paper_num 5 \
+            --categories $CATEGORIES \
+            --max_paper_num $MAX_PAPER_NUM \
             --provider OpenAI \
-            --model gpt-4o \
+            --model $MODEL \
             --base_url https://api.openai.com/v1 \
             --api_key "$OPENAI_API_KEY" \
-            --filter_method bm25 \
-            --language korean \
+            --filter_method $FILTER_METHOD \
+            --language $LANGUAGE \
             --notify_method slack \
             --slack_webhook_url "$SLACK_WEBHOOK_URL" \
             --title "Daily arXiv" \
