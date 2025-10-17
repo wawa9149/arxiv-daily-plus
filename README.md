@@ -50,9 +50,13 @@ You choose the engine, it does the reading. ⚙️
 Inspired by [zotero-arxiv-daily](https://github.com/TideDra/zotero-arxiv-daily) and [customize-arxiv-daily](https://github.com/JoeLeelyf/customize-arxiv-daily/),
 I wanted a version that fits my workflow better — without relying on Zotero.
 I often work on multiple topics and prefer flexible, text-based recommendations.
-However, model quality varied too much, so I chose a paid AI model, **GPT-4** for more reliable results.
+However, I found that the **quality of recommendations varied significantly depending on the model**,
+so I decided to use a paid AI model, **GPT-4**, for more reliable results.
 To save cost, I added a **filtering step** before sending papers to GPT.
-And since I use **Slack** daily, I wanted my research digest delivered there — automatically. 💌
+And since I use **Slack** daily, I wanted my research digest delivered there automatically. 💌
+
+If you find this project useful, please ⭐ **star** and **fork** ⭐ this repository! 
+Special thanks to [TideDra](https://github.com/TideDra) and [JoeLeelyf](https://github.com/JoeLeelyf) for their inspiring work. 🙏
 
 ---
 
