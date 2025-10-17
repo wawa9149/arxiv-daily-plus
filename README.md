@@ -85,6 +85,15 @@ Then, it personalizes recommendations based on your `description.txt`, understan
 
 ## 🧩 Quick Start
 
+Before you start, remember that to use **OpenAI models** and **Slack notifications**,
+you’ll need both an **OpenAI API Key** and a **Slack Webhook URL**.
+If you haven’t set them up yet, check out these short guides first:
+
+* [OpenAI API Key 발급받는 법 (Korean)](https://velog.io/@sujin-koo/OpenAI-API-Key-%EB%B0%9C%EA%B8%89%EB%B0%9B%EB%8A%94-%EB%B2%95)
+* [How to Get Your OpenAI API Key (English)](https://velog.io/@sujin-koo/How-to-Get-Your-OpenAI-API-Key)
+* [Slack Webhook URL 설정 방법 (Korean)](https://velog.io/@sujin-koo/Slack-Webhook-URL-%EC%84%A4%EC%A0%95-%EB%B0%A9%EB%B2%95)
+* [How to Get a Slack Webhook URL (English)](https://velog.io/@sujin-koo/How-to-Get-a-Slack-Webhook-URL)
+
 ### ⚙️ **Set Up in GitHub Actions**
 
 1. **Fork this repo**
