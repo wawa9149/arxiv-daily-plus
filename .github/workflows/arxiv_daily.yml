@@ -23,7 +23,7 @@ jobs:
         run: |
           python main.py \
             --categories eess.AS cs.SD \
-            --max_paper_num 3 \
+            --max_paper_num 5 \
             --provider OpenAI \
             --model gpt-4o \
             --base_url https://api.openai.com/v1 \
