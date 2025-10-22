@@ -1,38 +1,46 @@
 """
-Use GPT Series Models
+Use GPT Series Models (supports both OpenAI & Azure OpenAI)
 """
 
-from openai import OpenAI
 import time
+from openai import OpenAI, AzureOpenAI
 
 class GPT():
-    def __init__(self, model, base_url, api_key):
+    def __init__(self, model, base_url, api_key, api_version="2025-01-01-preview"):
         self.model_name = model
         self.base_url = base_url
         self.api_key = api_key
-
+        self.api_version = api_version
         self._init_model()
 
     def _init_model(self):
-        self.client = OpenAI(base_url= self.base_url, api_key=self.api_key)
+        """
+        Initialize OpenAI or AzureOpenAI client automatically
+        """
+        if "azure" in self.base_url:
+            print("✅ Using Azure OpenAI endpoint")
+            self.client = AzureOpenAI(
+                azure_endpoint=self.base_url.rstrip("/"),
+                api_key=self.api_key,
+                api_version=self.api_version
+            )
+        else:
+            print("✅ Using OpenAI standard endpoint")
+            self.client = OpenAI(
+                base_url=self.base_url.rstrip("/"),
+                api_key=self.api_key
+            )
 
     def build_prompt(self, question):
-        message = []
-
-        message.append(
-            {
-                "type": "text",
-                "text": question,
-            }
-        )
-
-        prompt =  [
+        message = [
             {
                 "role": "user",
-                "content": message
+                "content": [
+                    {"type": "text", "text": question}
+                ]
             }
         ]
-        return prompt
+        return message
 
     def call_gpt_eval(self, message, model_name, retries=10, wait_time=1, temperature=0.0):
         for i in range(retries):
@@ -42,35 +50,34 @@ class GPT():
                     messages=message,
                     temperature=temperature
                 )
-                response_message = result.choices[0].message.content
-                return response_message
+                return result.choices[0].message.content
             except Exception as e:
                 if i < retries - 1:
-                    print(f"Failed to call the API {i+1}/{retries}, will retry after {wait_time} seconds.")
+                    print(f"⚠️ API call failed ({i+1}/{retries}), retrying in {wait_time}s...")
                     print(e)
                     time.sleep(wait_time)
-                    continue
                 else:
-                    print(f"Failed to call the API after {retries} attempts.")
-                    print(e)
-                    raise
+                    print("❌ Failed after all retries.")
+                    raise e
 
     def inference(self, prompt, temperature=0.7):
-        prompt = self.build_prompt(prompt)
-        response = self.call_gpt_eval(prompt, self.model_name, temperature=temperature)
+        messages = self.build_prompt(prompt)
+        response = self.call_gpt_eval(messages, self.model_name, temperature=temperature)
         return response
-    
-if __name__ == "__main__":
-    # Test GPT
-    model = "gpt-3.5-turbo"
-    base_url = "https://api.openai.com/v1"
-    api_key = "*"
 
-    # Test SiliconFlow
-    model = "deepseek-ai/DeepSeek-V3"
-    base_url = "https://api.siliconflow.cn/v1"
-    api_key = "*"
+
+if __name__ == "__main__":
+    # === Example: Azure OpenAI ===
+    model = "gpt-4o"  # Azure의 '배포 이름(Deployment name)'
+    base_url = "https://your-resource-name.openai.azure.com/"
+    api_key = "your-azure-api-key"
+    
     gpt = GPT(model, base_url, api_key)
-    prompt = "Hello, who are you?"
-    response = gpt.inference(prompt, temperature=1)
-    print(response)
+    print(gpt.inference("Hello from Azure!"))
+
+    # === Example: OpenAI ===
+    # model = "gpt-4o"
+    # base_url = "https://api.openai.com/v1"
+    # api_key = "sk-..."
+    # gpt = GPT(model, base_url, api_key)
+    # print(gpt.inference("Hello from OpenAI!"))

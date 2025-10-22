@@ -27,13 +27,14 @@ jobs:
           FILTER_METHOD: ${{ vars.FILTER_METHOD }}
           CATEGORIES: ${{ vars.CATEGORIES }}
           MAX_PAPER_NUM: ${{ vars.MAX_PAPER_NUM }}
+          BASE_URL: ${{ vars.BASE_URL }}
         run: |
           python main.py \
             --categories $CATEGORIES \
             --max_paper_num $MAX_PAPER_NUM \
             --provider OpenAI \
             --model $MODEL \
-            --base_url https://api.openai.com/v1 \
+            --base_url $BASE_URL \
             --api_key "$OPENAI_API_KEY" \
             --filter_method $FILTER_METHOD \
             --language $LANGUAGE \
