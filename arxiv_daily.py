@@ -465,8 +465,8 @@ class ArxivDaily:
 
     def summarize(self, recommendations):
         overview = ""
-        for i in range(len(recommendations)):
-            overview += f"{i + 1}. {recommendations[i]['title']} - {recommendations[i]['summary']}\n"
+        for i, paper in enumerate(recommendations):
+            overview += f"{i + 1}. {paper['title']} - {paper['summary']}\n"
 
         # -------- Chinese Version --------
         if self.language == "chinese":
@@ -667,8 +667,16 @@ class ArxivDaily:
             try:
                 raw_response = self.model.inference(prompt, temperature=self.temperature)
                 cleaned = _clean_model_response(raw_response)
-                data = json.loads(cleaned)
 
+                # JSON 복구 로직 추가
+                try:
+                    data = json.loads(cleaned)
+                except json.JSONDecodeError:
+                    import ast
+                    print("⚠️ JSON decoding failed, trying literal_eval fallback...")
+                    data = ast.literal_eval(cleaned)
+
+                # 언어별 기본 메시지 세트 (스코프 오류 방지용)
                 if self.language == "english":
                     no_trend = "No trend information available."
                     no_observation = "None."
@@ -736,14 +744,30 @@ class ArxivDaily:
                 return structured_summary, html_summary
 
             except Exception as error:
-                print(summary_retry_msg(attempt, error))
+                # summary_retry_msg이 미리 정의되어 있어 UnboundLocalError 없음
+                print(f"⚠️ Summary attempt {attempt} failed: {error}")
+
                 if attempt == max_retries:
                     try:
-                        for html_attempt in range(1, max_retries + 1):
-                            print(html_retry_msg(html_attempt))
-                            raw_html_response = self.model.inference(html_prompt, temperature=self.temperature)
-                            cleaned_html = _clean_model_response(raw_html_response)
-                            return cleaned_html
+                        print(f"🌀 HTML fallback attempt {attempt}...")
+                        raw_html_response = self.model.inference(html_prompt, temperature=self.temperature)
+                        cleaned_html = _clean_model_response(raw_html_response)
+
+                        if not cleaned_html.strip().startswith("<div"):
+                            print("⚠️ HTML fallback result invalid, regenerating manually...")
+                            cleaned_html = render_summary_sections({
+                            "trend_summary": summary_fail,
+                            "recommendations": [],
+                            "additional_observation": no_observation,
+                        })
+
+                        fallback_data = {
+                            "trend_summary": summary_fail,
+                            "recommendations": [],
+                            "additional_observation": no_observation,
+                        }
+                        return fallback_data, cleaned_html
+
                     except Exception as html_error:
                         print(f"[HTML Fallback Error] {html_error}")
                         fallback_data = {
@@ -751,8 +775,9 @@ class ArxivDaily:
                             "recommendations": [],
                             "additional_observation": no_observation,
                         }
-                        html_summary = render_summary_sections(structured_summary)
-                        return structured_summary, html_summary
+                        html_summary = render_summary_sections(fallback_data)
+                        return fallback_data, html_summary
+
 
 
 
