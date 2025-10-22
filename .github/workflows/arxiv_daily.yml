@@ -2,7 +2,7 @@ name: Arxiv Daily Slack Bot
 
 on:
   schedule:
-    - cron: "0 23 * * *"    # Runs every day at 08:00 KST (23:00 UTC)
+    - cron: "25 2 * * *"    # Runs every day at 08:00 KST (23:00 UTC)
   workflow_dispatch:        # Manual trigger from GitHub Actions UI
 
 jobs:
