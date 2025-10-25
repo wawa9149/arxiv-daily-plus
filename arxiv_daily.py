@@ -643,7 +643,7 @@ class ArxivDaily:
                 </div>
             """
 
-        # Common parts shared by all languages
+         # Common parts shared by all languages
         prompt = prompt_context + papers_context + json_instruction
         html_prompt = prompt_context + papers_context + html_instruction
 
@@ -664,19 +664,35 @@ class ArxivDaily:
 
         max_retries = 1
         for attempt in range(1, max_retries + 1):
+            # ⚙️ 기본값 미리 선언 → UnboundLocalError 방지
+            summary_fail = "Summary generation failed."
+            no_observation = "None."
+            no_trend = "No trend information available."
+            relevance_unknown = "Unknown relevance"
+            no_reason = "No recommendation reason provided."
+            no_contribution = "No key contribution provided."
+            field_error = "The 'recommendations' field must be a list."
+            missing_title = "A recommendation entry is missing its title."
+
             try:
                 raw_response = self.model.inference(prompt, temperature=self.temperature)
                 cleaned = _clean_model_response(raw_response)
 
-                # JSON 복구 로직 추가
+                # JSON 복구 로직 개선
                 try:
                     data = json.loads(cleaned)
                 except json.JSONDecodeError:
-                    import ast
-                    print("⚠️ JSON decoding failed, trying literal_eval fallback...")
-                    data = ast.literal_eval(cleaned)
+                    print("⚠️ JSON decoding failed, trying fallback parse...")
+                    # 작은따옴표를 큰따옴표로 바꿔 JSON 복구
+                    cleaned = cleaned.replace("'", '"')
+                    try:
+                        data = json.loads(cleaned)
+                    except Exception:
+                        import ast
+                        print("⚠️ JSON fallback also failed, trying literal_eval...")
+                        data = ast.literal_eval(cleaned)
 
-                # 언어별 기본 메시지 세트 (스코프 오류 방지용)
+                # 언어별 기본 메시지 세트 (override)
                 if self.language == "english":
                     no_trend = "No trend information available."
                     no_observation = "None."
@@ -744,7 +760,6 @@ class ArxivDaily:
                 return structured_summary, html_summary
 
             except Exception as error:
-                # summary_retry_msg이 미리 정의되어 있어 UnboundLocalError 없음
                 print(f"⚠️ Summary attempt {attempt} failed: {error}")
 
                 if attempt == max_retries:
@@ -753,13 +768,14 @@ class ArxivDaily:
                         raw_html_response = self.model.inference(html_prompt, temperature=self.temperature)
                         cleaned_html = _clean_model_response(raw_html_response)
 
+                        # HTML 유효성 검사
                         if not cleaned_html.strip().startswith("<div"):
-                            print("⚠️ HTML fallback result invalid, regenerating manually...")
+                            print("⚠️ HTML fallback invalid → generating manual fallback HTML...")
                             cleaned_html = render_summary_sections({
-                            "trend_summary": summary_fail,
-                            "recommendations": [],
-                            "additional_observation": no_observation,
-                        })
+                                "trend_summary": summary_fail,
+                                "recommendations": [],
+                                "additional_observation": no_observation,
+                            })
 
                         fallback_data = {
                             "trend_summary": summary_fail,
@@ -777,9 +793,6 @@ class ArxivDaily:
                         }
                         html_summary = render_summary_sections(fallback_data)
                         return fallback_data, html_summary
-
-
-
 
     def render_email(self, recommendations):
         # Set the path for saving the rendered HTML email
